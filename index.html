@@ -63,11 +63,14 @@ bt.push(['Stäng',ok]);M('Strykjärnet – Jobb','Yrke: '+(P.job||'inget'),bt)}}
 
 I.pizza=()=>M('Pizzeria Navestad','Kebabpizza 35 kr.',[['🍕 Köp pizza (35 kr, +35 hunger)',()=>{if(P.mo<35)return say('Inte nog pengar');P.mo-=35;P.hu+=35;cl()}],['Stäng',ok]]);
 I.view=()=>M('Kneippen','Utsikt över Norrköping och Motala ström!',[['Njut av utsikten (+8 energi)',()=>{P.en+=8;cl()}],['Stäng',ok]]);
-const R=new THREE.WebGLRenderer({canvas:C,antialias:true}),S=new THREE.Scene(),CAM=new THREE.PerspectiveCamera(65,1,.1,420);
+const R=new THREE.WebGLRenderer({canvas:C,antialias:false,powerPreference:'high-performance'}),S=new THREE.Scene(),CAM=new THREE.PerspectiveCamera(65,1,.1,420);R.setPixelRatio(Math.min(window.devicePixelRatio||1,1.25));R.shadowMap.enabled=false;
 function rs(){R.setSize(innerWidth,innerHeight,false);CAM.aspect=innerWidth/innerHeight;CAM.updateProjectionMatrix()}rs();onresize=rs;C.style.touchAction='none';
 S.fog=new THREE.Fog(0x87ceeb,105,310);
-const HL=new THREE.HemisphereLight(0xe8f3ff,0x53624a,1.05),SUN=new THREE.DirectionalLight(0xfff0d5,.95);SUN.position.set(50,100,30);SUN.castShadow=true;S.add(HL,SUN);
-const mat=c=>new THREE.MeshStandardMaterial({color:c,roughness:.86,metalness:.02});
+const HL=new THREE.HemisphereLight(0xe8f3ff,0x53624a,1.05),SUN=new THREE.DirectionalLight(0xfff0d5,.95);SUN.position.set(50,100,30);SUN.castShadow=false;S.add(HL,SUN);
+const MAT_CACHE=new Map(), BOX_GEO=new Map(), PLANE_GEO=new Map();
+const mat=c=>{const k=String(c);if(!MAT_CACHE.has(k))MAT_CACHE.set(k,new THREE.MeshStandardMaterial({color:c,roughness:.86,metalness:.02}));return MAT_CACHE.get(k)};
+const boxGeo=(w,h,d)=>{const k=w+','+h+','+d;if(!BOX_GEO.has(k))BOX_GEO.set(k,new THREE.BoxGeometry(w,h,d));return BOX_GEO.get(k)};
+const planeGeo=(w,d)=>{const k=w+','+d;if(!PLANE_GEO.has(k))PLANE_GEO.set(k,new THREE.PlaneGeometry(w,d));return PLANE_GEO.get(k)};
 function box(x,z,w,d,h,c,y=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y+h/2,z);S.add(m);return m}
 function plane(x,z,w,d,c,y){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),mat(c));m.rotation.x=-Math.PI/2;m.position.set(x,y,z);S.add(m)}
 function label(n,x,y,z,sc=1){const c=document.createElement('canvas');c.width=512;c.height=96;const g=c.getContext('2d');g.fillStyle='#000a';g.fillRect(0,0,512,96);g.fillStyle='#fff';g.font='bold 32px sans-serif';g.textAlign='center';g.fillText(n,256,62);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c)}));s.position.set(x,y,z);s.scale.set(18*sc,3.4*sc,1);S.add(s)}
@@ -80,7 +83,7 @@ road(0,-90,0,175,9,.06);road(-60,-60,-60,60,7,.06);road(75,-80,75,60,7,.06);road
 function ds(x,z,s){const dx=s[2]-s[0],dz=s[3]-s[1],t=Math.max(0,Math.min(1,((x-s[0])*dx+(z-s[1])*dz)/(dx*dx+dz*dz)));return Math.hypot(x-s[0]-t*dx,z-s[1]-t*dz)}
 const A=[],BI=[],BRG=[0,-60,75],ISL=[-22,-2.9,17],ST={},TS=[];
 const WT=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,64,64);g.fillStyle='#2b3a55';g.fillRect(12,10,40,32);g.fillStyle='#cfd8e6';g.fillRect(31,10,2,32);g.fillRect(12,25,40,2);return new THREE.CanvasTexture(c)})();
-function fm(c,a,b){const t=WT.clone();t.needsUpdate=true;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(a,b);return new THREE.MeshLambertMaterial({color:c,map:t})}
+const FACADE_CACHE=new Map();function fm(c,a,b){const k=[c,a,b].join(':');if(!FACADE_CACHE.has(k)){const t=WT.clone();t.needsUpdate=true;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(a,b);FACADE_CACHE.set(k,new THREE.MeshLambertMaterial({color:c,map:t}))}return FACADE_CACHE.get(k)}
 function fbox(x,z,w,d,h,c,y=0){const f=Math.max(1,Math.round(h/3.3)),mx=fm(c,Math.max(1,Math.round(d/3.2)),f),mz=fm(c,Math.max(1,Math.round(w/3.2)),f),r=mat(new THREE.Color(c).multiplyScalar(.6).getHex()),m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),[mx,mx,r,r,mz,mz]);m.position.set(x,y+h/2,z);S.add(m);return m}
 function gable(x,z,w,d,y,rh,c){const s=new THREE.Shape();s.moveTo(-w/2-.6,0);s.lineTo(w/2+.6,0);s.lineTo(0,rh);s.closePath();const m=new THREE.Mesh(new THREE.ExtrudeGeometry(s,{depth:d+1.2,bevelEnabled:false}),mat(c));m.position.set(x,y,z-d/2-.6);S.add(m)}
 const hs=(r,rh)=>(x,z,w,d,h,c)=>{fbox(x,z,w,d,h,c);gable(x,z,w,d,h,rh,r)};
@@ -109,8 +112,8 @@ label('HAGEBY',40,22,110);label('NAVESTAD / Ringdansen (farligt!)',-25,50,168);l
 const rd=(x,z)=>Math.abs(z-rz(x))<12||RS.some(s=>ds(x,z,s)<s[4]/2+3);
 function free(x,z,r){if(rd(x,z)||(x>-182&&x<-138&&z>24&&z<88)||(x>-95&&x<-65&&z>-56&&z<-34))return false;for(const a of A)if(x+r>a[0]-3&&x-r<a[2]+3&&z+r>a[1]-3&&z-r<a[3]+3)return false;return Math.abs(x)<190&&z>-90&&z<172}
 const PAL=[0xe3c98a,0xd9a066,0xcdb891,0xb9573f,0xe8e0d0];
-for(let i=0,n=0;i<1200&&n<130;i++){const x=Math.random()*380-190,z=Math.random()*260-90,vi=x<-60||z<-45||Math.random()<.3,w=vi?7+Math.random()*3:9+Math.random()*10,d=vi?7+Math.random()*3:8+Math.random()*5;if(z>95&&!vi)continue;if(free(x,z,Math.max(w,d)/2)){n++;addB(x,z,w,d,vi?4+Math.random()*1.5:9+Math.random()*7,'',0,vi?[0xa63a2a,0xe3c98a,0xcdb891,0xd9a066][n%4]:PAL[n%5],vi?'house':'f')}}
-for(let i=0,n=0;i<700&&n<110;i++){const x=Math.random()*380-190,z=Math.random()*260-90;if(free(x,z,2)){n++;box(x,z,.5,.5,2.5,0x6b4423);const k=new THREE.Mesh(new THREE.ConeGeometry(2,5,8),mat(0x2e6b2e));k.position.set(x,5,z);S.add(k)}}
+for(let i=0,n=0;i<800&&n<75;i++){const x=Math.random()*380-190,z=Math.random()*260-90,vi=x<-60||z<-45||Math.random()<.3,w=vi?7+Math.random()*3:9+Math.random()*10,d=vi?7+Math.random()*3:8+Math.random()*5;if(z>95&&!vi)continue;if(free(x,z,Math.max(w,d)/2)){n++;addB(x,z,w,d,vi?4+Math.random()*1.5:9+Math.random()*7,'',0,vi?[0xa63a2a,0xe3c98a,0xcdb891,0xd9a066][n%4]:PAL[n%5],vi?'house':'f')}}
+for(let i=0,n=0;i<400&&n<55;i++){const x=Math.random()*380-190,z=Math.random()*260-90;if(free(x,z,2)){n++;box(x,z,.5,.5,2.5,0x6b4423);const k=new THREE.Mesh(new THREE.ConeGeometry(2,5,8),mat(0x2e6b2e));k.position.set(x,5,z);S.add(k)}}
 function blocked(x,z,r){if(Math.abs(x)>195||z<-95||z>178||(x>140&&z<-55))return true;for(const a of A)if(x+r>a[0]&&x-r<a[2]&&z+r>a[1]&&z-r<a[3])return true;if(Math.abs(z-rz(x))<7.5+r&&!BRG.some(b=>x-r>=b-4.5&&x+r<=b+4.5)&&!(Math.abs(x-ISL[0])<ISL[2]&&Math.abs(z-ISL[1])<ISL[2]))return true;return false}
 const area=()=>P.x<-95&&P.z>-5?'Himmelstalund':P.z>130?'Navestad':P.z>88?'Hageby':P.x<-60&&P.z<-45?'Lindö':P.z>50?'Ljura/Söder':'Centrum';
 I.tram=()=>M('Kollektivtrafik','Spårvagn linje 2 (Fridvalla–Ringdansen–Kvarnberget) och stadsbussar. Biljett 10 kr.',TS.map(s=>{const m=Math.round(Math.hypot(s[1]-P.x,s[2]-P.z)/4)+3;return['🚋 '+s[0]+' ('+m+' min)',()=>{if(P.mo<10)return say('Inte nog pengar');P.mo-=10;P.x=s[1];P.z=s[2];P.min+=m;say('Du klev av vid '+s[0])}]}).concat([['Stäng',ok]]));
@@ -186,7 +189,7 @@ function person(c,sk){const g=new THREE.Group(),m=(w,h,d,y,cc)=>{const e=new THR
 const pm=person(0x2b6fd6);let yaw=0,pit=.45,dr=false,lx=0,ly=0,hitcd=0,NP=[],CR=[];
 C.onpointerdown=e=>{dr=true;lx=e.clientX;ly=e.clientY};onpointerup=()=>dr=false;C.onpointermove=e=>{if(!dr)return;yaw-=(e.clientX-lx)*.006;pit=Math.max(.15,Math.min(1.1,pit+(e.clientY-ly)*.004));lx=e.clientX;ly=e.clientY};
 const DL=['Hej! Se upp för gängen i Navestad när det blir mörkt.','IFK Norrköping letar alltid talanger!','Strykjärnet var förr textilindustri. Nu är det jobb och kultur.','Motala ström är Norrköpings själ.','Plugga på Campus – då får du bra jobb!','Jag fikar hellre än jobbar...','Gymmet vid arenan är bra för konditionen.','Ät ordentligt, annars svimmar du.'];
-for(let i=0;i<40;i++){let x,z;do{x=Math.random()*340-170;z=Math.random()*240-60}while(blocked(x,z,.8));NP.push({m:person(new THREE.Color().setHSL(Math.random(),.5,.5).getHex()),x,z,tx:x,tz:z,w:0})}
+for(let i=0;i<22;i++){let x,z;do{x=Math.random()*340-170;z=Math.random()*240-60}while(blocked(x,z,.8));NP.push({m:person(new THREE.Color().setHSL(Math.random(),.5,.5).getHex()),x,z,tx:x,tz:z,w:0})}
 [[-2.2,1],[2.2,-1],[-62,1],[73,-1],[77,1],[-58,-1]].forEach(([x,d],i)=>{CR.push({m:box(x,0,2.2,4.4,1.3,[0xc0392b,0xf1c40f,0x2980b9,0xecf0f1,0x27ae60][i%5],.4),x,d,z:Math.random()*300-150})});
 
 // --- Norrköping realism pass: streetscape, river crossings and city landmarks ---
@@ -329,7 +332,7 @@ function draw(){const t=P.min/60,fd=t>=6&&t<=20?Math.sin((t-6)/14*Math.PI):0,f=.
 const dx=Math.sin(yaw),dz=Math.cos(yaw),d=13;CAM.position.set(P.x-dx*d*Math.cos(pit),2+d*Math.sin(pit),P.z-dz*d*Math.cos(pit));CAM.lookAt(P.x,2,P.z);R.render(S,CAM);
 const n=near();pr.style.display=n&&!paused?'block':'none';if(n)pr.textContent='E: '+n.n;
 if(T%8==0){const m=Math.floor(P.min%60);HUD.innerHTML='❤ '+Math.ceil(P.hp)+' ⚡ '+Math.floor(P.en)+' 🍔 '+Math.floor(P.hu)+' 💰 '+P.mo+' kr &nbsp;🕒 '+String(hr()).padStart(2,'0')+':'+String(m).padStart(2,'0')+' Dag '+P.day+' 📍'+area()+'<br>📚 '+P.kn+' 💪 '+P.fi+' ⚽ '+P.sk+' &nbsp;'+(P.job||'arbetslös')+(P.club?' | '+P.club:'')+' <small>(WASD, dra=kamera, Shift=sprint, Space=slå, E=interagera, I=status)</small>'}}
-function loop(){if(!paused)upd();draw();requestAnimationFrame(loop)}
+let frameNo=0;function loop(){requestAnimationFrame(loop);if(!paused)upd();if((frameNo++&1)===0)draw()}
 init();M('🏙️ Norrköping 3D','Utforska staden i 3D: gå i skolan, plugga på Campus, spela fotboll, jobba och träna. Prata med Norrköpingsbor, akta dig för bilar och gäng – särskilt i Navestad och på natten!',[['Börja spela',()=>say('Gå till byggnader och tryck E')]]);loop();
 
 </script></body></html>
