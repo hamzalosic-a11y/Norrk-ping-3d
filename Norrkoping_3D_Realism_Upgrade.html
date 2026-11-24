@@ -1,0 +1,275 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Norrköping 3D – stor karta</title>
+<style>
+:root{--bg:#1b2a21;--fg:#f4f1e8;--ac:#f2b705;--pn:#16201aee;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#101914}}
+:root[data-theme=dark]{--bg:#101914}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+#hud{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;padding:6px 8px;background:#0008;font-size:13px;line-height:1.5;pointer-events:none}
+#toast{position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--pn);padding:8px 14px;border-radius:10px;opacity:0;transition:opacity .3s;max-width:90%;text-align:center;pointer-events:none}
+#menu{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#0009;padding:12px}
+#box{background:var(--pn);border:2px solid var(--ac);border-radius:14px;padding:16px;max-width:440px;width:100%;max-height:85%;overflow:auto}
+#box h2{margin:0 0 8px;color:var(--ac);font-size:19px}#box p{margin:0 0 10px;font-size:14px;line-height:1.5}
+#box button{display:block;width:100%;margin:6px 0;padding:10px;border:0;border-radius:8px;background:#2e4a3a;color:var(--fg);font-size:15px;cursor:pointer}
+#box button:hover{background:var(--ac);color:#111}
+#ctl{position:fixed;left:0;right:0;bottom:env(safe-area-inset-bottom,0px);display:flex;justify-content:space-between;padding:10px;pointer-events:none}
+#ctl div{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(2,54px);gap:4px;pointer-events:auto}
+#ctl button{border:0;border-radius:50%;background:#ffffff33;color:#fff;font-size:20px;touch-action:none}
+</style></head><body>
+<canvas id="c"></canvas><div id="hud"></div><div id="toast"></div>
+<div id="menu"><div id="box"></div></div>
+<div id="ctl"><div id="dp"><span></span><button data-k="ArrowUp">▲</button><span></span><button data-k="ArrowLeft">◀</button><button data-k="ArrowDown">▼</button><button data-k="ArrowRight">▶</button></div>
+<div id="ab"><button data-k="Shift">»</button><button data-k=" ">⚔</button><button data-k="e">E</button><span></span><span></span><span></span></div></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const C=document.getElementById('c'),HUD=document.getElementById('hud'),TO=document.getElementById('toast'),MN=document.getElementById('menu'),BX=document.getElementById('box');
+let P,G,K={},T=0,paused=false,cd=0,tt;
+const hr=()=>Math.floor(P.min/60)%24;
+function init(){P={x:22,z:52,hp:100,en:100,hu:80,mo:200,kn:0,fi:10,sk:5,gp:null,gl:0,gd:0,up:null,ul:0,deg:null,club:null,job:null,day:1,min:7*60,kills:0,w:0};G=[]}
+function say(t){TO.textContent=t;TO.style.opacity=1;clearTimeout(tt);tt=setTimeout(()=>TO.style.opacity=0,2600)}
+function M(t,p,btns){paused=true;BX.innerHTML='<h2>'+t+'</h2><p>'+p+'</p>';btns.forEach(b=>{const e=document.createElement('button');e.textContent=b[0];e.onclick=()=>{MN.style.display='none';paused=false;b[1]&&b[1]()};BX.appendChild(e)});MN.style.display='flex'}
+const ok=()=>{};
+function use(c,f){if(P.en<c)return say('För trött – sov eller ta en fika!');P.en-=c;P.hu=Math.max(0,P.hu-c/4);f()}
+function cl(){P.hp=Math.min(100,P.hp);P.en=Math.min(100,P.en);P.hu=Math.min(100,P.hu)}
+function open(a,b){const h=hr();return h>=a&&h<b}
+const PR=['Naturvetenskap','Teknik','Samhälle','Idrott','E-sport'],UP=[['Datavetenskap','data'],['Medieteknik','data'],['Sjuksköterska','vard'],['Lärare','lar']];
+const CL=[['Smedby AIS',0,80],['IF Sylvia',25,200],['IFK Norrköping',50,500]];
+function status(){M('Status','Dag '+P.day+'<br>Gymnasium: '+(P.gd?'Examen '+P.gp:P.gp?P.gp+' ('+P.gl+'/8)':'ej valt')+'<br>Universitet: '+(P.deg?'Examen '+P.deg:P.up?P.up[0]+' ('+P.ul+'/10)':'ej valt')+'<br>Fotbollslag: '+(P.club||'inget')+'<br>Yrke: '+(P.job||'inget')+'<br>Besegrade gängmedlemmar: '+P.kills,[['Stäng',ok]])}
+function sleep(){P.day++;P.min=7*60;P.en=100;P.hp+=25;P.hu=Math.max(5,P.hu-20);cl();say('God morgon! Dag '+P.day)}
+const I={
+home(){M('Hemma','Din lägenhet i Norrköping. Dag '+P.day,[['😴 Sov till morgonen',sleep],['📋 Status',status],['Stäng',ok]])},
+sight(){M('Konserthuset','Du njuter av kulturen vid ån.',[['Lyssna på musik (+5 energi)',()=>{P.en+=5;cl();say('Skönt!')}],['Stäng',ok]])},
+shop(){M('ICA Maxi','Du har '+P.mo+' kr.',[['🍝 Mat (40 kr) +40 hunger',()=>{if(P.mo<40)return say('Inte nog pengar');P.mo-=40;P.hu+=40;cl()}],['☕ Fika (15 kr) +15 hunger +10 energi',()=>{if(P.mo<15)return say('Inte nog pengar');P.mo-=15;P.hu+=15;P.en+=10;cl()}],['Stäng',ok]])},
+hosp(){M('Vrinnevisjukhuset','Läkarvård kostar 100 kr.',[['Bota alla skador',()=>{if(P.mo<100)return say('Inte nog pengar');P.mo-=100;P.hp=100;say('Du är som ny!')}],['Stäng',ok]])},
+run(){M('Folkparken','Spring en runda!',[['🏃 Löp (-15 energi, +2 kondition)',()=>use(15,()=>{P.fi+=2;say('Bra löprunda!')})],['Stäng',ok]])},
+gym(){if(!open(6,22))return say('Gymmet är stängt');M('Gymmet','Medlemskap 30 kr/pass.',[['🏋 Träna (30 kr, -20 energi, +3 kondition)',()=>{if(P.mo<30)return say('Inte nog pengar');use(20,()=>{P.mo-=30;P.fi+=3;say('Starkare!')})}],['Stäng',ok]])},
+school(){if(!open(8,16))return say('Skolan är öppen 08–16');if(P.gd)return M('Gymnasiet','Du har redan tagit studenten! Gå vidare till universitetet.',[['Stäng',ok]]);
+if(!P.gp)return M('Välj gymnasieprogram','Vad vill du plugga?',PR.map(p=>[p,()=>{P.gp=p;say('Du började på '+p)}]));
+M('Gymnasiet – '+P.gp,'Lektioner: '+P.gl+'/8',[['📚 Gå på lektion (-15 energi)',()=>use(15,()=>{P.gl++;P.kn+=4;if(P.gp=='Idrott')P.fi++;say(P.gl>=8?'🎓 STUDENTEN! Du kan söka universitet.':'Du lärde dig något!');if(P.gl>=8)P.gd=1})],['Byt program',()=>{P.gp=null;P.gl=0}],['Stäng',ok]])},
+uni(){if(!open(8,17))return say('Campus är öppet 08–17');if(!P.gd)return say('Du behöver gymnasieexamen först!');if(P.deg)return M('Campus Norrköping','Du har examen i '+P.deg+'.',[['Stäng',ok]]);
+if(!P.up)return M('Välj utbildning','Campus Norrköping (LiU):',UP.map(u=>[u[0],()=>{P.up=u;say('Du började på '+u[0])}]));
+M('Campus – '+P.up[0],'Föreläsningar: '+P.ul+'/10',[['🎓 Plugga (-20 energi)',()=>use(20,()=>{P.ul++;P.kn+=6;if(P.ul>=10){P.deg=P.up[1];say('🎓 EXAMEN! Nya jobb öppnas.')}else say('Bra studiepass!')})],['Byt utbildning',()=>{P.up=null;P.ul=0}],['Stäng',ok]])},
+club(){if(!open(6,22))return say('Arenan är stängd');
+const tr=['⚽ Träna (-20 energi, +4 teknik)',()=>use(20,()=>{P.sk+=4;P.fi+=1;say('Bra träning!')})];
+const bt=[];CL.forEach(c=>bt.push(['Gå med i '+c[0]+' (krav teknik '+c[1]+')',()=>{if(P.sk<c[1])return say('För låg teknik, träna mer!');P.club=c[0];say('Välkommen till '+c[0]+'!')}]));
+bt.push(tr);
+if(P.club)bt.push(['🏟 Spela match (-30 energi)',()=>use(30,()=>{const c=CL.find(x=>x[0]==P.club);const win=Math.random()<(P.sk+P.fi/2)/(P.sk+P.fi/2+45+Math.random()*30);if(win){P.mo+=c[2];P.sk+=2;say('VINST! +'+c[2]+' kr')}else{P.mo+=c[2]/4;say('Förlust... +'+Math.floor(c[2]/4)+' kr')}})]);
+bt.push(['Stäng',ok]);M('Platinumcars Arena','Teknik: '+P.sk+' | Lag: '+(P.club||'inget'),bt)},
+job(){if(!open(8,20))return say('Jobbcentret är öppet 08–20');
+const js=[['Kassabiträde',150,()=>1],['Lärare',400,()=>P.deg],['Utvecklare',600,()=>P.deg=='data'],['Sjuksköterska',500,()=>P.deg=='vard'],['Fotbollsproffs',900,()=>P.club=='IFK Norrköping'&&P.sk>=70]];
+const bt=js.map(j=>[(j[2]()?'':'🔒 ')+j[0]+' ('+j[1]+' kr)',()=>{if(!j[2]())return say('Du uppfyller inte kraven');P.job=j[0];P.w=j[1];say('Du är nu '+j[0])}]);
+if(P.job)bt.unshift(['💼 Jobba ett pass (-25 energi, +'+P.w+' kr)',()=>use(25,()=>{P.mo+=P.w;say('Lön! +'+P.w+' kr')})]);
+bt.push(['Stäng',ok]);M('Strykjärnet – Jobb','Yrke: '+(P.job||'inget'),bt)}};
+
+I.pizza=()=>M('Pizzeria Navestad','Kebabpizza 35 kr.',[['🍕 Köp pizza (35 kr, +35 hunger)',()=>{if(P.mo<35)return say('Inte nog pengar');P.mo-=35;P.hu+=35;cl()}],['Stäng',ok]]);
+I.view=()=>M('Kneippen','Utsikt över Norrköping och Motala ström!',[['Njut av utsikten (+8 energi)',()=>{P.en+=8;cl()}],['Stäng',ok]]);
+const R=new THREE.WebGLRenderer({canvas:C,antialias:true}),S=new THREE.Scene(),CAM=new THREE.PerspectiveCamera(65,1,.1,420);
+function rs(){R.setSize(innerWidth,innerHeight,false);CAM.aspect=innerWidth/innerHeight;CAM.updateProjectionMatrix()}rs();onresize=rs;C.style.touchAction='none';
+S.fog=new THREE.Fog(0x87ceeb,105,310);
+const HL=new THREE.HemisphereLight(0xe8f3ff,0x53624a,1.05),SUN=new THREE.DirectionalLight(0xfff0d5,.95);SUN.position.set(50,100,30);SUN.castShadow=true;S.add(HL,SUN);
+const mat=c=>new THREE.MeshStandardMaterial({color:c,roughness:.86,metalness:.02});
+function box(x,z,w,d,h,c,y=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y+h/2,z);S.add(m);return m}
+function plane(x,z,w,d,c,y){const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),mat(c));m.rotation.x=-Math.PI/2;m.position.set(x,y,z);S.add(m)}
+function label(n,x,y,z,sc=1){const c=document.createElement('canvas');c.width=512;c.height=96;const g=c.getContext('2d');g.fillStyle='#000a';g.fillRect(0,0,512,96);g.fillStyle='#fff';g.font='bold 32px sans-serif';g.textAlign='center';g.fillText(n,256,62);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c)}));s.position.set(x,y,z);s.scale.set(18*sc,3.4*sc,1);S.add(s)}
+const RP=[[-200,-30],[-120,-20],[-60,-8],[0,0],[50,-12],[100,-35],[150,-55],[200,-60]];
+function rz(x){for(let i=1;i<8;i++)if(x<=RP[i][0]){const a=RP[i-1],b=RP[i];return a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0])}return -60}
+plane(0,40,460,320,0x4f8a48,0);for(let x=-200;x<200;x+=8)plane(x+4,rz(x+4),8.6,15,0x2f7fbf,.03);
+plane(185,-100,100,90,0x2a6fb0,.03);label('Bråviken',175,4,-90,1);
+const RS=[];function road(x1,z1,x2,z2,w,y=.04){const L=Math.hypot(x2-x1,z2-z1),m=new THREE.Mesh(new THREE.PlaneGeometry(w,L),mat(0x555560));m.rotation.order='YXZ';m.rotation.x=-Math.PI/2;m.rotation.y=Math.atan2(x2-x1,z2-z1);m.position.set((x1+x2)/2,y,(z1+z2)/2);S.add(m);RS.push([x1,z1,x2,z2,w])}
+road(0,-90,0,175,9,.06);road(-60,-60,-60,60,7,.06);road(75,-80,75,60,7,.06);road(-200,12,200,12,8);road(-100,100,100,100,6);road(-70,140,50,140,6);road(-70,12,-50,95,5);road(-90,-5,-90,48,5);road(-160,56,-60,56,5);road(0,-16,100,-52,6);road(-150,-32,0,-14,6);
+function ds(x,z,s){const dx=s[2]-s[0],dz=s[3]-s[1],t=Math.max(0,Math.min(1,((x-s[0])*dx+(z-s[1])*dz)/(dx*dx+dz*dz)));return Math.hypot(x-s[0]-t*dx,z-s[1]-t*dz)}
+const A=[],BI=[],BRG=[0,-60,75],ISL=[-22,-2.9,17],ST={},TS=[];
+const WT=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,64,64);g.fillStyle='#2b3a55';g.fillRect(12,10,40,32);g.fillStyle='#cfd8e6';g.fillRect(31,10,2,32);g.fillRect(12,25,40,2);return new THREE.CanvasTexture(c)})();
+function fm(c,a,b){const t=WT.clone();t.needsUpdate=true;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(a,b);return new THREE.MeshLambertMaterial({color:c,map:t})}
+function fbox(x,z,w,d,h,c,y=0){const f=Math.max(1,Math.round(h/3.3)),mx=fm(c,Math.max(1,Math.round(d/3.2)),f),mz=fm(c,Math.max(1,Math.round(w/3.2)),f),r=mat(new THREE.Color(c).multiplyScalar(.6).getHex()),m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),[mx,mx,r,r,mz,mz]);m.position.set(x,y+h/2,z);S.add(m);return m}
+function gable(x,z,w,d,y,rh,c){const s=new THREE.Shape();s.moveTo(-w/2-.6,0);s.lineTo(w/2+.6,0);s.lineTo(0,rh);s.closePath();const m=new THREE.Mesh(new THREE.ExtrudeGeometry(s,{depth:d+1.2,bevelEnabled:false}),mat(c));m.position.set(x,y,z-d/2-.6);S.add(m)}
+const hs=(r,rh)=>(x,z,w,d,h,c)=>{fbox(x,z,w,d,h,c);gable(x,z,w,d,h,rh,r)};
+ST.f=(x,z,w,d,h,c)=>fbox(x,z,w,d,h,c);ST.house=hs(0x3b2b2b,3.5);ST.sch=hs(0x9b3b2e,4);ST.shed=hs(0x9aa0a8,4);
+ST.brick=(x,z,w,d,h,c)=>{fbox(x,z,w,d,h,c);gable(x,z,w,d,h,3,0x555555);const k=new THREE.Mesh(new THREE.CylinderGeometry(1,1.3,h+14,8),mat(c));k.position.set(x+w/2-2,(h+14)/2,z);S.add(k)};
+ST.conc=(x,z,w,d,h,c)=>{ST.brick(x,z,w,d,h,c);box(x,z+d/2+.8,w*.55,1.6,h*.75,0x7fb3d5)};
+ST.glass=(x,z,w,d,h,c)=>{fbox(x,z,w,d,h,c);box(x,z,w+6,d+4,.6,0x88b7d9,h)};
+ST.hosp=(x,z,w,d,h,c)=>{fbox(x,z,w,d,h,c);box(x,z,6,1.2,.4,0xdd2222,h);box(x,z,1.2,6,.4,0xdd2222,h)};
+ST.iron=(x,z,w,d,h,c)=>{const m=new THREE.Mesh(new THREE.CylinderGeometry(9,9,h,7),[fm(c,14,8),mat(0x777777),mat(0x777777)]);m.position.set(x,h/2,z);S.add(m)};
+ST.stad=(x,z,w,d,h,c)=>{box(x,z,w,d,h,c);box(x,z,w+1,d+1,1,0xffffff,h);plane(x,z,w-8,d-8,0x3fa34d,h+1.03);[[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([a,b])=>{box(x+a*w/2,z+b*d/2,.8,.8,18,0x999999);box(x+a*w/2,z+b*d/2,3,1.5,1.5,0xffffcc,17)})};
+ST.hill=(x,z,w,d,h,c)=>{const m=new THREE.Mesh(new THREE.ConeGeometry(14,7,16),mat(0x4a8f4a));m.position.set(x,3.5,z+10);S.add(m);box(x,z,w,d,h,c)};
+plane(ISL[0],ISL[1],34,34,0x9a9a8a,.08);
+function addB(x,z,w,d,h,n,t,c,s){(ST[s]||ST.f)(x,z,w,d,h,c);A.push([x-w/2,z-d/2,x+w/2,z+d/2]);if(n){label(n,x,h+(s=='iron'?9:s=='brick'||s=='conc'?8:4),z);if(t)BI.push({x,z,w,d,n,t})}}
+function stop(x,z,n){box(x,z,4,1.5,2.6,0x9ec5e0);box(x,z,5,2.4,.3,0x333333,2.6);box(x+3,z,.3,.3,4,0x444444);box(x+3,z,1.6,.2,1.2,0xf2c200,4);A.push([x-2.5,z-1.2,x+2.5,z+1.2]);label(n,x,6.5,z,.7);BI.push({x,z,w:4,d:3,n:'Hållplats '+n,t:'tram'});TS.push([n,x,z+4])}
+[[-22,-3,18,18,28,'Strykjärnet (Arbetets museum)','job',0xe8c547,'iron'],[-24,-34,22,12,9,'Louis De Geer Konsert & Kongress','sight',0x8b3a2b,'conc'],[-46,-34,20,12,11,'Campus Norrköping (LiU)','uni',0xa0522d,'brick'],[-30,-72,5,5,18,'Kneippen (utsikt)','view',0x888080,'hill'],[105,-70,22,12,6,'Ingelsta Shopping','shop',0xeeeeee],
+[22,62,12,10,5,'Hemma (Ljura)','home',0xa63a2a,'house'],[-30,27,22,12,7,'Resecentrum (tåg/buss/spårvagn)','tram',0xbfc5cc,'glass'],[14,36,18,12,10,'Ebersteinska Gymnasiet','school',0xe9d8a6,'sch'],[40,32,26,20,12,'Platinumcars Arena (IFK)','club',0x2b3f8f,'stad'],[64,56,12,10,7,'Gymmet','gym',0x555566],[-45,45,16,10,6,'ICA Maxi','shop',0xd62828],[-30,88,20,12,16,'Vrinnevisjukhuset','hosp',0xe8eef2,'hosp'],
+[-135,8,28,18,12,'Himmelstalundshallen','hall',0x6a7fa0,'shed'],[-110,28,26,16,9,'Himmelstalundsmässan (Mässhall)','mass',0x8a6a55,'shed'],
+[10,108,14,10,6,'Pizzeria Hageby','pizza',0xe67e22],[-70,128,12,10,6,'Pizzeria Ringdansen','pizza',0xe67e22],[90,15,14,10,6,'Pizzeria Smedby','pizza',0xe67e22]].forEach(b=>addB(...b));
+[[26,122],[54,122],[26,152],[54,152]].forEach(p=>addB(p[0],p[1],24,9,14,'',0,0xcdb891));
+for(let i=0;i<4;i++)for(let j=0;j<2;j++)addB(-50+i*22,124+j*32,10,10,26+((i*7+j*5)%10),'',0,0xc9a27a);
+[['Resecentrum',-30,38],['Idrottsparken',28,48],['Holmen/Campus',-40,-24],['Vrinnevi',-18,88],['Hageby',35,94],['Ringdansen',-28,133.5],['Himmelstalund',-122,46],['Ingelsta',95,-60],['Lindö',-110,-60],['Smedby',88,28]].forEach(s=>stop(s[1],s[2],s[0]));
+box(-80,-45,24,16,.3,0x2e7d32);label('Folkparken (Löpning)',-80,6,-45);BI.push({x:-80,z:-45,w:24,d:16,n:'Folkparken (Löpning)',t:'run'});
+function pitch(x,z,w,d,n){plane(x,z,w,d,0x3fa34d,.07);[[0,-d/2,w,.5],[0,d/2,w,.5],[-w/2,0,.5,d],[w/2,0,.5,d],[0,0,.5,d]].forEach(l=>plane(x+l[0],z+l[1],l[2],l[3],0xffffff,.09));[-1,1].forEach(s=>box(x+s*w/2,z,.6,5,2.4,0xffffff));label(n,x,7,z);BI.push({x,z,w,d,n,t:'fpitch'})}
+pitch(-160,40,34,22,'Träningsplan Fotboll');pitch(-160,72,34,22,'Konstgräsplan');
+label('HAGEBY',40,22,110);label('NAVESTAD / Ringdansen (farligt!)',-25,50,168);label('Lindö',-95,12,-75);label('Himmelstalund',-130,18,60);
+const rd=(x,z)=>Math.abs(z-rz(x))<12||RS.some(s=>ds(x,z,s)<s[4]/2+3);
+function free(x,z,r){if(rd(x,z)||(x>-182&&x<-138&&z>24&&z<88)||(x>-95&&x<-65&&z>-56&&z<-34))return false;for(const a of A)if(x+r>a[0]-3&&x-r<a[2]+3&&z+r>a[1]-3&&z-r<a[3]+3)return false;return Math.abs(x)<190&&z>-90&&z<172}
+const PAL=[0xe3c98a,0xd9a066,0xcdb891,0xb9573f,0xe8e0d0];
+for(let i=0,n=0;i<1200&&n<130;i++){const x=Math.random()*380-190,z=Math.random()*260-90,vi=x<-60||z<-45||Math.random()<.3,w=vi?7+Math.random()*3:9+Math.random()*10,d=vi?7+Math.random()*3:8+Math.random()*5;if(z>95&&!vi)continue;if(free(x,z,Math.max(w,d)/2)){n++;addB(x,z,w,d,vi?4+Math.random()*1.5:9+Math.random()*7,'',0,vi?[0xa63a2a,0xe3c98a,0xcdb891,0xd9a066][n%4]:PAL[n%5],vi?'house':'f')}}
+for(let i=0,n=0;i<700&&n<110;i++){const x=Math.random()*380-190,z=Math.random()*260-90;if(free(x,z,2)){n++;box(x,z,.5,.5,2.5,0x6b4423);const k=new THREE.Mesh(new THREE.ConeGeometry(2,5,8),mat(0x2e6b2e));k.position.set(x,5,z);S.add(k)}}
+function blocked(x,z,r){if(Math.abs(x)>195||z<-95||z>178||(x>140&&z<-55))return true;for(const a of A)if(x+r>a[0]&&x-r<a[2]&&z+r>a[1]&&z-r<a[3])return true;if(Math.abs(z-rz(x))<7.5+r&&!BRG.some(b=>x-r>=b-4.5&&x+r<=b+4.5)&&!(Math.abs(x-ISL[0])<ISL[2]&&Math.abs(z-ISL[1])<ISL[2]))return true;return false}
+const area=()=>P.x<-95&&P.z>-5?'Himmelstalund':P.z>130?'Navestad':P.z>88?'Hageby':P.x<-60&&P.z<-45?'Lindö':P.z>50?'Ljura/Söder':'Centrum';
+I.tram=()=>M('Kollektivtrafik','Spårvagn linje 2 (Fridvalla–Ringdansen–Kvarnberget) och stadsbussar. Biljett 10 kr.',TS.map(s=>{const m=Math.round(Math.hypot(s[1]-P.x,s[2]-P.z)/4)+3;return['🚋 '+s[0]+' ('+m+' min)',()=>{if(P.mo<10)return say('Inte nog pengar');P.mo-=10;P.x=s[1];P.z=s[2];P.min+=m;say('Du klev av vid '+s[0])}]}).concat([['Stäng',ok]]));
+const TV=[];function veh(ax,fix,d,p,lo,hi,len,c){const g=new THREE.Group(),z=ax=='z',b=new THREE.Mesh(new THREE.BoxGeometry(z?2.6:len,3,z?len:2.6),mat(c)),w=new THREE.Mesh(new THREE.BoxGeometry(z?2.7:len-1.5,1,z?len-1.5:2.7),mat(0x1d2c3d));b.position.y=2;w.position.y=2.6;g.add(b,w);S.add(g);TV.push({m:g,ax,fix,d,p,lo,hi,len})}
+veh('z',-1.4,1,-60,-90,175,14,0xf2c200);veh('z',1.4,-1,120,-90,175,14,0xf2c200);veh('x',10.4,1,-120,-200,200,14,0xf2c200);
+veh('z',-58,1,-20,-60,60,10,0x2f8f4a);veh('z',-62,-1,40,-60,60,10,0x2f8f4a);veh('z',73,1,0,-80,60,10,0x2f8f4a);veh('x',13.6,-1,100,-200,200,10,0x2f8f4a);veh('x',99,1,-60,-100,100,10,0x2f8f4a);veh('x',141,-1,0,-70,50,10,0x2f8f4a);
+function tv(){for(const v of TV){v.p+=v.d*.4;if(v.p>v.hi)v.p=v.lo;if(v.p<v.lo)v.p=v.hi;const z=v.ax=='z';v.m.position.set(z?v.fix:v.p,0,z?v.p:v.fix);v.m.rotation.y=z?(v.d>0?0:Math.PI):(v.d>0?Math.PI/2:-Math.PI/2);
+if(hitcd<=0&&Math.abs(z?P.x-v.fix:P.z-v.fix)<2.4&&Math.abs(z?P.z-v.p:P.x-v.p)<v.len/2+1){hitcd=60;P.hp-=15;if(z)P.x+=P.x<v.fix?-3:3;else P.z+=P.z<v.fix?-3:3;say('Du blev påkörd av en buss/spårvagn! -15 HP')}}}
+I.hall=()=>{if(!open(6,22))return say('Hallen är stängd');M('Himmelstalundshallen','Norrköpings stora hall (HC Vita Hästen m.fl.).',[['🏑 Innebandy/inomhusträning (-20 energi, +3 kondition, +1 teknik)',()=>use(20,()=>{P.fi+=3;P.sk+=1;say('Svettigt!')})],['🏒 Se hockeymatch (40 kr, +10 energi)',()=>{if(P.mo<40)return say('Inte nog pengar');P.mo-=40;P.en+=10;cl();say('Vita Hästen vann!')}],['Stäng',ok]])};
+I.mass=()=>{if(!open(8,18))return say('Mässhallen är öppen 08–18');M('Himmelstalundsmässan','Mässhallen – evenemang och mässor.',[['🎓 Karriärmässa (-10 energi, +5 kunskap)',()=>use(10,()=>{P.kn+=5;say('Du fick kontakter och tips!')})],['🦺 Jobba extra som vakt (-20 energi, +120 kr)',()=>use(20,()=>{P.mo+=120;say('+120 kr')})],['Stäng',ok]])};
+I.fpitch=()=>{if(!open(6,22))return say('Planen är stängd efter 22');M('Träningsplan Fotboll','Teknik: '+P.sk+' | Kondition: '+P.fi,[['⚽ Passningsövning (-15 energi, +3 teknik)',()=>use(15,()=>{P.sk+=3;say('Fina passningar!')})],['🥅 Skottövning – 5 skott (-20 energi)',()=>use(20,()=>{let g=0;for(let i=0;i<5;i++)if(Math.random()<.25+P.sk/150)g++;P.sk+=1+g*.6;say(g+'/5 mål!')})],['🏃 Konditionsrunda (-15 energi, +2 kondition, +1 teknik)',()=>use(15,()=>{P.fi+=2;P.sk+=1;say('Pulsen är uppe!')})],['🤝 Träningsmatch 7 mot 7 (-25 energi)',()=>use(25,()=>{const w=Math.random()<(P.sk+P.fi/2)/(P.sk+P.fi/2+40);P.sk+=w?4:2;if(w&&P.club){P.mo+=50;say('Seger! +50 kr bonus')}else say(w?'Seger!':'Förlust, men du lärde dig!')})],['Stäng',ok]])};
+function person(c,sk){const g=new THREE.Group(),m=(w,h,d,y,cc)=>{const e=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(cc));e.position.y=y;g.add(e)};m(.9,1.3,.5,1.5,c);m(.8,.9,.4,.45,0x222233);const h=new THREE.Mesh(new THREE.SphereGeometry(.38,10,8),mat(sk||0xe0b090));h.position.y=2.45;g.add(h);S.add(g);return g}
+const pm=person(0x2b6fd6);let yaw=0,pit=.45,dr=false,lx=0,ly=0,hitcd=0,NP=[],CR=[];
+C.onpointerdown=e=>{dr=true;lx=e.clientX;ly=e.clientY};onpointerup=()=>dr=false;C.onpointermove=e=>{if(!dr)return;yaw-=(e.clientX-lx)*.006;pit=Math.max(.15,Math.min(1.1,pit+(e.clientY-ly)*.004));lx=e.clientX;ly=e.clientY};
+const DL=['Hej! Se upp för gängen i Navestad när det blir mörkt.','IFK Norrköping letar alltid talanger!','Strykjärnet var förr textilindustri. Nu är det jobb och kultur.','Motala ström är Norrköpings själ.','Plugga på Campus – då får du bra jobb!','Jag fikar hellre än jobbar...','Gymmet vid arenan är bra för konditionen.','Ät ordentligt, annars svimmar du.'];
+for(let i=0;i<40;i++){let x,z;do{x=Math.random()*340-170;z=Math.random()*240-60}while(blocked(x,z,.8));NP.push({m:person(new THREE.Color().setHSL(Math.random(),.5,.5).getHex()),x,z,tx:x,tz:z,w:0})}
+[[-2.2,1],[2.2,-1],[-62,1],[73,-1],[77,1],[-58,-1]].forEach(([x,d],i)=>{CR.push({m:box(x,0,2.2,4.4,1.3,[0xc0392b,0xf1c40f,0x2980b9,0xecf0f1,0x27ae60][i%5],.4),x,d,z:Math.random()*300-150})});
+
+// --- Norrköping realism pass: streetscape, river crossings and city landmarks ---
+const detailMat = c => new THREE.MeshStandardMaterial({color:c, roughness:.82, metalness:.04});
+function detailBox(x,y,z,w,h,d,c, parent=S){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),detailMat(c));
+  m.position.set(x,y+h/2,z); parent.add(m); return m;
+}
+function streetLamp(x,z){
+  const g=new THREE.Group();
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(.09,.14,7,8),detailMat(0x343b3d));
+  pole.position.y=3.5; g.add(pole);
+  const arm=detailBox(.45,6.65,0,.95,.12,.12,0x343b3d,g);
+  const head=detailBox(.92,6.55,0,.55,.18,.35,0xe6dfb5,g);
+  const glow=new THREE.PointLight(0xffdca0,.45,17); glow.position.set(.95,6.35,0);g.add(glow);
+  g.position.set(x,0,z);S.add(g);
+}
+function addBridge(x,z,width=12){
+  // A stone-and-steel bridge crossing Motala ström
+  detailBox(x,.22,z,width, .55, 24,0x777c7c);
+  detailBox(x,.82,z-width/2+.35,width,.22,.35,0x343b40);
+  detailBox(x,.82,z+width/2-.35,width,.22,.35,0x343b40);
+  for(let k=-5;k<=5;k++){
+    detailBox(x,.55,z+k*2.1,.18,.65,.18,0x555d60);
+  }
+  for(const side of [-1,1]){
+    detailBox(x,.75,z+side*(width/2-.35),24,.18,.22,0x454d50);
+    for(let k=-10;k<=10;k++)detailBox(x,.75,z+side*(width/2-.35)+k*1.15,.12,.72,.12,0x596164);
+  }
+}
+function addWindows(x,z,w,d,h,cols=5,rows=2,front=true){
+  const sideZ=front ? z+d/2+.035 : z-d/2-.035;
+  const winW=Math.min(1.35,(w-2)/(cols*1.6));
+  const winH=Math.min(1.45,(h-1.8)/(rows*1.6));
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const xx=x-w/2+1.2+(w-2.4)*(c+.5)/cols;
+    const yy=1.25+r*(h-2.1)/Math.max(1,rows);
+    detailBox(xx,yy,sideZ,winW,winH,.07,(r+c)%4===0?0x9fc2ce:0x496b7d);
+    detailBox(xx,yy+winH/2,sideZ+.045,winW+.14,.09,.08,0xe0d7c4);
+  }
+}
+function addShopfront(x,z,w,color=0x9a4d35){
+  detailBox(x,0,z,w,3.8,1.2,color);
+  for(let i=-1;i<=1;i++){
+    detailBox(x+i*w*.27, .65,z+.64,w*.19,2.0,.12,0x85aeb9);
+  }
+  detailBox(x,2.9,z+.7,w*.9,.22,.16,0xe7d9b7);
+}
+function addTree(x,z,scale=1){
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.22*scale,.34*scale,2.4*scale,7),detailMat(0x65452e));
+  trunk.position.set(x,1.2*scale,z);S.add(trunk);
+  const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(1.8*scale,1),detailMat(0x356b42));
+  crown.position.set(x,3.25*scale,z);S.add(crown);
+  const crown2=new THREE.Mesh(new THREE.IcosahedronGeometry(1.15*scale,1),detailMat(0x477c49));
+  crown2.position.set(x+.65*scale,3.5*scale,z+.15*scale);S.add(crown2);
+}
+function addRoadMarkings(x1,z1,x2,z2,width){
+  const len=Math.hypot(x2-x1,z2-z1),angle=Math.atan2(x2-x1,z2-z1);
+  for(let p=5;p<len-3;p+=12){
+    const x=x1+(x2-x1)*p/len,z=z1+(z2-z1)*p/len;
+    const dash=new THREE.Mesh(new THREE.PlaneGeometry(.22,4.2),detailMat(0xd8d4bd));
+    dash.rotation.x=-Math.PI/2;dash.rotation.z=angle;
+    dash.position.set(x,.075,z);S.add(dash);
+  }
+}
+// Bridges at the main crossings, with railings and visible stone abutments.
+addBridge(0,rz(0),12); addBridge(-60,rz(-60),10); addBridge(75,rz(75),10);
+// Proper tram rails and sleepers along the main north-south corridors.
+function tramTrack(x,z1,z2){
+  for(const off of [-.72,.72]){
+    const rail=detailBox(x+off,.13,(z1+z2)/2,.13,.13,Math.abs(z2-z1),0x343a3d);
+    rail.position.y=.13;
+  }
+  for(let z=z1;z<z2;z+=2.2)detailBox(x,.07,z,2.3,.12,.22,0x5a5147);
+}
+tramTrack(-1.4,-88,173);tramTrack(1.4,-88,173);
+tramTrack(73,-78,58);tramTrack(77,-78,58);
+// Add lane markings to the principal streets.
+[[-200,12,200,12,8],[-100,100,100,100,6],[0,-90,0,175,9],[-60,-60,-60,60,7],[75,-80,75,60,7]].forEach(r=>addRoadMarkings(...r));
+// Recognisable central Norrköping street scene: brick façades, shop windows and a small square.
+for(const b of [[-46,-34,20,12,11],[-22,-3,18,18,28],[-24,-34,22,12,9],[14,36,18,12,10],[-30,27,22,12,7],[40,32,26,20,12]]){
+  addWindows(b[0],b[1],b[2],b[3],b[4],Math.max(3,Math.floor(b[2]/4)),Math.max(2,Math.floor(b[4]/5)));
+}
+addShopfront(-44,-41,13,0x8d4935);
+addShopfront(-22,-13,12,0x9a6b43);
+addShopfront(14,29,13,0x6d7780);
+// Industrial Landscape details around the old textile buildings.
+for(let i=0;i<4;i++){
+  detailBox(-12+i*5,7,-20,2.4,1.5,.25,0x343b40);
+  detailBox(-12+i*5,8.6,-20,2.4,.12,.3,0xc5b99f);
+}
+for(let z=-31;z<=-17;z+=4)addTree(-58,z,.8);
+for(let z=-20;z<=-5;z+=5)addTree(-4,z,.75);
+// Tree-lined parks and neighbourhood streets.
+for(let x=-92;x<=-68;x+=6){addTree(x,-55,.9);addTree(x,-35,.8);}
+for(let x=20;x<=62;x+=7){addTree(x,75,.75);addTree(x,94,.85);}
+for(let z=20;z<=70;z+=10){addTree(-52,z,.7);addTree(82,z,.75);}
+// Street lighting and bus-stop poles give the city a more lived-in scale.
+for(let x=-180;x<=180;x+=30){streetLamp(x,16);streetLamp(x,-8);}
+for(let z=-70;z<=150;z+=28){streetLamp(-64,z);streetLamp(78,z);}
+// Extra district signage and landmarks.
+label('GAMLA STADEN',-10,15,-52,.85);
+label('INDUSTRILANDSKAPET',-28,22,-17,.9);
+label('MOTALA STRÖM',62,3,-5,.8);
+label('NORRKÖPING',0,30,5,1.2);
+label('ÖSTGÖTAPORTEN',40,17,32,.7);
+// A more convincing river surface with subtle parallel highlights.
+for(let x=-195;x<190;x+=18){
+  const z=rz(x);
+  const ripple=new THREE.Mesh(new THREE.PlaneGeometry(9,.18),detailMat(0x8bc4d4));
+  ripple.rotation.x=-Math.PI/2;ripple.rotation.z=-.08;
+  ripple.position.set(x,.055,z+4);S.add(ripple);
+}
+
+const pr=document.createElement('div');pr.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#000a;color:#f2b705;padding:6px 14px;border-radius:8px;font-weight:bold;display:none;pointer-events:none';document.body.appendChild(pr);
+const _i=init;init=function(){G&&G.forEach(g=>S.remove(g.m));_i();yaw=0};
+const nav=()=>P.z>88,night=()=>{const h=hr();return h>=22||h<6};
+function near(){for(const b of BI){const dx=Math.max(b.x-b.w/2-P.x,0,P.x-b.x-b.w/2),dz=Math.max(b.z-b.d/2-P.z,0,P.z-b.z-b.d/2);if(Math.hypot(dx,dz)<4)return{n:b.n,f:()=>I[b.t]()}}
+for(const n of NP)if(Math.hypot(n.x-P.x,n.z-P.z)<3)return{n:'Prata med Norrköpingsbo',f:()=>{const g=Math.random()<.2;M('Norrköpingsbo','“'+DL[Math.floor(Math.random()*DL.length)]+'”',[g?['Tack för tipset! (+20 kr)',()=>P.mo+=20]:['Hej då',ok]])}}}
+function act(){if(paused)return;const n=near();n?n.f():say('Inget att göra här')}
+onkeydown=e=>{K[e.key]=1;K[e.key.toLowerCase()]=1;if(e.key==' ')e.preventDefault();if(e.key=='e'||e.key=='E')act();if(e.key=='i'&&!paused)status()};
+onkeyup=e=>{K[e.key]=0;K[e.key.toLowerCase()]=0};
+document.querySelectorAll('[data-k]').forEach(b=>{const k=b.dataset.k;b.onpointerdown=e=>{e.preventDefault();K[k]=1;if(k=='e')act()};b.onpointerup=b.onpointerleave=()=>K[k]=0});
+function over(m){M('💀 Game over','Du klarade '+P.day+' dagar i Norrköping. '+m,[['Börja om',init]])}
+function spawn(){const tg=nav()?6:night()?3:1;if(G.length>=tg)return;for(let i=0;i<10;i++){const a=Math.random()*6.28,d=35+Math.random()*20,x=P.x+Math.cos(a)*d,z=P.z+Math.sin(a)*d;if(!blocked(x,z,1)){G.push({m:person(0x8b1a1a,0xc9a07a),x,z,hp:3,c:0});return}}}
+function upd(){T++;const sp=(K.Shift&&P.en>5)?.28:.15,dx=Math.sin(yaw),dz=Math.cos(yaw),f=(K.w||K.ArrowUp?1:0)-(K.s||K.ArrowDown?1:0),s=(K.d||K.ArrowRight?1:0)-(K.a||K.ArrowLeft?1:0);if(K.z)yaw+=.03;if(K.x)yaw-=.03;
+let mx=dx*f-dz*s,mz=dz*f+dx*s;const l=Math.hypot(mx,mz);if(l){mx=mx/l*sp;mz=mz/l*sp;if(!blocked(P.x+mx,P.z,.7))P.x+=mx;if(!blocked(P.x,P.z+mz,.7))P.z+=mz;pm.rotation.y=Math.atan2(mx,mz);if(sp>.15)P.en-=.05}
+pm.position.set(P.x,l?Math.abs(Math.sin(T*.3))*.2:0,P.z);
+P.min+=1/15;P.hu-=.003;P.en=Math.min(100,P.en+.004);if(P.hu<=0){P.hu=0;P.hp-=.02}if(P.min>=1440){P.min-=1440;P.day++}
+if(T%120==0)spawn();cd--;hitcd--;
+if(K[' ']&&cd<=0){cd=20;pm.rotation.x=.4;setTimeout(()=>pm.rotation.x=0,120);for(const g of G)if(Math.hypot(g.x-P.x,g.z-P.z)<3.4){g.hp-=1+Math.floor(P.fi/25);g.x+=(g.x-P.x);g.z+=(g.z-P.z)}}
+for(let i=G.length-1;i>=0;i--){const g=G[i],d=Math.hypot(P.x-g.x,P.z-g.z);if(g.hp<=0||d>110){if(g.hp<=0){const m=10+Math.floor(Math.random()*20);P.mo+=m;P.kills++;say('Du slog ner en gängmedlem! +'+m+' kr')}S.remove(g.m);G.splice(i,1);continue}
+const ch=d<(nav()?45:30);const vx=ch?(P.x-g.x)/d*.08:Math.cos(T/50+i)*.02,vz=ch?(P.z-g.z)/d*.08:Math.sin(T/60+i)*.02;if(!blocked(g.x+vx,g.z,.7))g.x+=vx;if(!blocked(g.x,g.z+vz,.7))g.z+=vz;g.m.position.set(g.x,0,g.z);g.m.rotation.y=Math.atan2(P.x-g.x,P.z-g.z);g.c--;
+if(d<1.8&&g.c<=0){g.c=60;P.hp-=8;const m=Math.min(P.mo,20);P.mo-=m;say('Gängmedlem slår dig! -8 HP'+(m?', -'+m+' kr stulet':''))}}
+for(const n of NP){if(n.w>0){n.w--}else{const d=Math.hypot(n.tx-n.x,n.tz-n.z);if(d<1){n.w=60+Math.random()*200|0;n.tx=n.x+Math.random()*40-20;n.tz=n.z+Math.random()*40-20}else{const vx=(n.tx-n.x)/d*.04,vz=(n.tz-n.z)/d*.04;if(!blocked(n.x+vx,n.z+vz,.8)){n.x+=vx;n.z+=vz;n.m.rotation.y=Math.atan2(vx,vz)}else{n.tx=n.x;n.tz=n.z}}}n.m.position.set(n.x,0,n.z)}
+for(const c of CR){c.z+=c.d*.35;if(c.z>170)c.z=-90;if(c.z<-90)c.z=170;c.m.position.set(c.x,.4+.65,c.z);if(Math.abs(P.x-c.x)<2&&Math.abs(P.z-c.z)<3&&hitcd<=0){hitcd=60;P.hp-=12;P.x+=P.x<c.x?-2.5:2.5;say('Du blev påkörd av en bil! -12 HP')}}
+tv();if(P.hp<=0)over(P.hu<=0?'Du svalt ihjäl.':'Du dog.');cl()}
+const SK=new THREE.Color(),DK=new THREE.Color(0x0a1030),LT=new THREE.Color(0x87ceeb);
+function draw(){const t=P.min/60,fd=t>=6&&t<=20?Math.sin((t-6)/14*Math.PI):0,f=.12+.88*fd;SK.copy(DK).lerp(LT,f);S.background=SK;S.fog.color.copy(SK);HL.intensity=.3+.7*f;SUN.intensity=.1+.8*f;
+const dx=Math.sin(yaw),dz=Math.cos(yaw),d=13;CAM.position.set(P.x-dx*d*Math.cos(pit),2+d*Math.sin(pit),P.z-dz*d*Math.cos(pit));CAM.lookAt(P.x,2,P.z);R.render(S,CAM);
+const n=near();pr.style.display=n&&!paused?'block':'none';if(n)pr.textContent='E: '+n.n;
+if(T%8==0){const m=Math.floor(P.min%60);HUD.innerHTML='❤ '+Math.ceil(P.hp)+' ⚡ '+Math.floor(P.en)+' 🍔 '+Math.floor(P.hu)+' 💰 '+P.mo+' kr &nbsp;🕒 '+String(hr()).padStart(2,'0')+':'+String(m).padStart(2,'0')+' Dag '+P.day+' 📍'+area()+'<br>📚 '+P.kn+' 💪 '+P.fi+' ⚽ '+P.sk+' &nbsp;'+(P.job||'arbetslös')+(P.club?' | '+P.club:'')+' <small>(WASD, dra=kamera, Shift=sprint, Space=slå, E=interagera, I=status)</small>'}}
+function loop(){if(!paused)upd();draw();requestAnimationFrame(loop)}
+init();M('🏙️ Norrköping 3D','Utforska staden i 3D: gå i skolan, plugga på Campus, spela fotboll, jobba och träna. Prata med Norrköpingsbor, akta dig för bilar och gäng – särskilt i Navestad och på natten!',[['Börja spela',()=>say('Gå till byggnader och tryck E')]]);loop();
+
+</script></body></html>
