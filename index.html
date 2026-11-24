@@ -114,6 +114,66 @@ for(let i=0,n=0;i<700&&n<110;i++){const x=Math.random()*380-190,z=Math.random()*
 function blocked(x,z,r){if(Math.abs(x)>195||z<-95||z>178||(x>140&&z<-55))return true;for(const a of A)if(x+r>a[0]&&x-r<a[2]&&z+r>a[1]&&z-r<a[3])return true;if(Math.abs(z-rz(x))<7.5+r&&!BRG.some(b=>x-r>=b-4.5&&x+r<=b+4.5)&&!(Math.abs(x-ISL[0])<ISL[2]&&Math.abs(z-ISL[1])<ISL[2]))return true;return false}
 const area=()=>P.x<-95&&P.z>-5?'Himmelstalund':P.z>130?'Navestad':P.z>88?'Hageby':P.x<-60&&P.z<-45?'Lindö':P.z>50?'Ljura/Söder':'Centrum';
 I.tram=()=>M('Kollektivtrafik','Spårvagn linje 2 (Fridvalla–Ringdansen–Kvarnberget) och stadsbussar. Biljett 10 kr.',TS.map(s=>{const m=Math.round(Math.hypot(s[1]-P.x,s[2]-P.z)/4)+3;return['🚋 '+s[0]+' ('+m+' min)',()=>{if(P.mo<10)return say('Inte nog pengar');P.mo-=10;P.x=s[1];P.z=s[2];P.min+=m;say('Du klev av vid '+s[0])}]}).concat([['Stäng',ok]]));
+
+/* Transit careers and route-based public transport gameplay */
+const TRANSIT_ROUTES=[
+ {name:'Spårvagn 2',kind:'🚋',stops:['Himmelstalund','Resecentrum','Holmen/Campus','Idrottsparken','Hageby','Ringdansen']},
+ {name:'Spårvagn 3',kind:'🚋',stops:['Ingelsta','Resecentrum','Idrottsparken','Hageby','Ringdansen']},
+ {name:'Stadsbuss – city',kind:'🚌',stops:['Resecentrum','Holmen/Campus','Idrottsparken','Vrinnevi','Hageby']},
+ {name:'Stadsbuss – västra',kind:'🚌',stops:['Resecentrum','Himmelstalund','Smedby','Ingelsta']},
+ {name:'Regionbuss – ut från stan',kind:'🚌',stops:['Resecentrum','Ingelsta','Smedby','Lindö']}
+];
+const TRANSIT_JOBS=[
+ ['Busschaufför',260,'bus'],['Spårvagnsförare',300,'tram'],['Tågvärd / stationsarbetare',240,'train'],
+ ['Taxiförare',220,'taxi'],['Mekaniker',280,'mechanic'],['Ambulanspersonal',320,'emergency'],
+ ['Brandman',320,'emergency'],['Byggarbetare',250,'general'],['Ordningsvakt',230,'general']
+];
+function transitShift(route){
+ const names=route.stops,idx=P.transitIndex||0,next=names[idx%names.length];
+ const stop=TS.find(x=>x[0]===next)||TS[0];
+ if(P.en<8)return say('Du är för trött för att fortsätta passet.');
+ P.en-=8;P.hu=Math.max(0,P.hu-2);P.min+=5;P.mo+=route.pay;
+ P.transitIndex=idx+1;P.transitDone=(P.transitDone||0)+1;
+ P.x=stop[1];P.z=stop[2];cl();
+ say(route.kind+' Du körde till '+next+'. +'+route.pay+' kr');
+}
+I.job=function(){
+ if(!open(6,22))return say('Jobbcentret är öppet 06–22');
+ const bt=TRANSIT_JOBS.map(j=>[(P.job===j[0]?'✓ ':'')+j[0]+' ('+j[1]+' kr/stopp)',()=>{
+   P.job=j[0];P.w=j[1];P.jobType=j[2];P.transitIndex=0;P.transitDone=0;
+   say('Du fick jobbet som '+j[0]+'. Gå till jobbcentret för att starta passet.')
+ }]);
+ const old=[['Kassabiträde',150,'general'],['Lärare',400,'school'],['Utvecklare',600,'data'],['Sjuksköterska',500,'health'],['Fotbollsproffs',900,'football']];
+ old.forEach(j=>bt.push([j[0]+' ('+j[1]+' kr/pass)',()=>{
+   if(j[2]==='school'&&!P.deg)return say('Du behöver en examen först');
+   if(j[2]==='data'&&P.deg!=='data')return say('Du behöver examen i datavetenskap');
+   if(j[2]==='health'&&P.deg!=='vard')return say('Du behöver vårdutbildning');
+   if(j[2]==='football'&&(P.club!=='IFK Norrköping'||P.sk<70))return say('Du behöver IFK-kontrakt och 70 i teknik');
+   P.job=j[0];P.w=j[1];P.jobType=j[2];say('Du är nu '+j[0])
+ }]));
+ if(P.job)bt.unshift(['▶ Starta arbetspass – '+P.job,()=>{
+   if(P.jobType==='bus'||P.jobType==='tram'){
+     const routes=TRANSIT_ROUTES.filter(r=>P.jobType==='bus'?r.kind==='🚌':r.kind==='🚋');
+     M('Välj linje','Följ hållplatserna i spelvärlden. Linjerna är förenklade spelrutter, inte en officiell tidtabell.',routes.map(r=>[r.kind+' '+r.name,()=>M(P.job,'Kör till nästa hållplats och få lön per stopp.',[['▶ Nästa hållplats',()=>{r.pay=P.w;transitShift(r);I.job()}],['Avsluta pass',()=>say('Pass avslutat. Du körde '+(P.transitDone||0)+' stopp.')]] )]).concat([['Stäng',ok]]))
+   }else if(P.jobType==='train'){
+     M('Stationspass – Resecentrum','Hjälp resenärer, kontrollera biljetter och håll plattformen säker.',[['🎫 Kontrollera biljetter (+240 kr, -8 energi)',()=>use(8,()=>{P.mo+=P.w;P.min+=10;say('Biljettkontrollen klar! +'+P.w+' kr')})],['🚉 Hjälp resenärer (+240 kr, -8 energi)',()=>use(8,()=>{P.mo+=P.w;P.min+=10;say('Resenärerna fick hjälp! +'+P.w+' kr')})],['Avsluta pass',ok]])
+   }else{
+     use(25,()=>{P.mo+=P.w;P.min+=30;say('Arbetspass klart! +'+P.w+' kr')})
+   }
+ }]);
+ bt.push(['Stäng',ok]);M('Jobbcenter – Norrköping','Välj yrke. Transportjobb har hållplatsbaserade arbetspass.',bt)
+};
+I.tram=function(){
+ const routes=TRANSIT_ROUTES;
+ const bt=routes.map(r=>[r.kind+' '+r.name+' – '+r.stops.join(' → '),()=>{
+   if(P.mo<10)return say('Biljetten kostar 10 kr');
+   P.mo-=10;const dest=r.stops[r.stops.length-1],stop=TS.find(x=>x[0]===dest)||TS[0];
+   const mins=Math.max(3,Math.round(Math.hypot(stop[1]-P.x,stop[2]-P.z)/4)+3);
+   P.x=stop[1];P.z=stop[2];P.min+=mins;cl();say('Du reste med '+r.name+' till '+dest+'.')
+ }]);
+ bt.push(['Stäng',ok]);M('Kollektivtrafik','Välj en förenklad spelrutt. Biljett 10 kr. Bussar kan även köra ut från stadskärnan.',bt)
+};
+
 const TV=[];function veh(ax,fix,d,p,lo,hi,len,c){const g=new THREE.Group(),z=ax=='z',b=new THREE.Mesh(new THREE.BoxGeometry(z?2.6:len,3,z?len:2.6),mat(c)),w=new THREE.Mesh(new THREE.BoxGeometry(z?2.7:len-1.5,1,z?len-1.5:2.7),mat(0x1d2c3d));b.position.y=2;w.position.y=2.6;g.add(b,w);S.add(g);TV.push({m:g,ax,fix,d,p,lo,hi,len})}
 veh('z',-1.4,1,-60,-90,175,14,0xf2c200);veh('z',1.4,-1,120,-90,175,14,0xf2c200);veh('x',10.4,1,-120,-200,200,14,0xf2c200);
 veh('z',-58,1,-20,-60,60,10,0x2f8f4a);veh('z',-62,-1,40,-60,60,10,0x2f8f4a);veh('z',73,1,0,-80,60,10,0x2f8f4a);veh('x',13.6,-1,100,-200,200,10,0x2f8f4a);veh('x',99,1,-60,-100,100,10,0x2f8f4a);veh('x',141,-1,0,-70,50,10,0x2f8f4a);
