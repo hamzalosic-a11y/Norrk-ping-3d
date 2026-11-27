@@ -177,7 +177,27 @@ I.tram=function(){
  bt.push(['Stäng',ok]);M('Kollektivtrafik','Välj en förenklad spelrutt. Biljett 10 kr. Bussar kan även köra ut från stadskärnan.',bt)
 };
 
-const TV=[];function veh(ax,fix,d,p,lo,hi,len,c){const g=new THREE.Group(),z=ax=='z',b=new THREE.Mesh(new THREE.BoxGeometry(z?2.6:len,3,z?len:2.6),mat(c)),w=new THREE.Mesh(new THREE.BoxGeometry(z?2.7:len-1.5,1,z?len-1.5:2.7),mat(0x1d2c3d));b.position.y=2;w.position.y=2.6;g.add(b,w);S.add(g);TV.push({m:g,ax,fix,d,p,lo,hi,len})}
+const TV=[];
+function veh(ax,fix,d,p,lo,hi,len,c){
+  const g=new THREE.Group(),alongZ=ax==='z';
+  const bodySize=alongZ?[2.65,2.0,len]:[len,2.0,2.65];
+  const cabinSize=alongZ?[2.18,1.05,len*.43]:[len*.43,1.05,2.18];
+  const body=new THREE.Mesh(new THREE.BoxGeometry(...bodySize),mat(c));body.position.y=1.45;g.add(body);
+  const cabin=new THREE.Mesh(new THREE.BoxGeometry(...cabinSize),mat(0x263b4b));cabin.position.y=2.92;g.add(cabin);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(alongZ?2.12:len*.42,.13,alongZ?len*.42:2.12),mat(0xd8d9d4));roof.position.y=3.49;g.add(roof);
+  const bumper=new THREE.Mesh(new THREE.BoxGeometry(alongZ?2.78:len,.22,alongZ?len:2.78),mat(0x30363a));bumper.position.y=.58;g.add(bumper);
+  const wheelGeo=new THREE.CylinderGeometry(.43,.43,.22,10);
+  for(const side of [-1,1]) for(const end of [-1,1]){
+    const wheel=new THREE.Mesh(wheelGeo,mat(0x17191b));
+    wheel.rotation.z=Math.PI/2;
+    wheel.position.set(alongZ?side*1.34:end*(len*.34),.48,alongZ?end*(len*.34):side*1.34);g.add(wheel);
+  }
+  for(const side of [-1,1]){
+    const light=new THREE.Mesh(new THREE.BoxGeometry(alongZ?.42:.18,.24,alongZ?.18:.42),mat(0xffedb5));
+    light.position.set(alongZ?side*.82:len*.47,1.45,alongZ?len*.47:side*.82);g.add(light);
+  }
+  S.add(g);TV.push({m:g,ax,fix,d,p,lo,hi,len});
+}
 veh('z',-1.4,1,-60,-90,175,14,0xf2c200);veh('z',1.4,-1,120,-90,175,14,0xf2c200);veh('x',10.4,1,-120,-200,200,14,0xf2c200);
 veh('z',-58,1,-20,-60,60,10,0x2f8f4a);veh('z',-62,-1,40,-60,60,10,0x2f8f4a);veh('z',73,1,0,-80,60,10,0x2f8f4a);veh('x',13.6,-1,100,-200,200,10,0x2f8f4a);veh('x',99,1,-60,-100,100,10,0x2f8f4a);veh('x',141,-1,0,-70,50,10,0x2f8f4a);
 function tv(){for(const v of TV){v.p+=v.d*.4;if(v.p>v.hi)v.p=v.lo;if(v.p<v.lo)v.p=v.hi;const z=v.ax=='z';v.m.position.set(z?v.fix:v.p,0,z?v.p:v.fix);v.m.rotation.y=z?(v.d>0?0:Math.PI):(v.d>0?Math.PI/2:-Math.PI/2);
@@ -193,18 +213,25 @@ for(let i=0;i<22;i++){let x,z;do{x=Math.random()*340-170;z=Math.random()*240-60}
 [[-2.2,1],[2.2,-1],[-62,1],[73,-1],[77,1],[-58,-1]].forEach(([x,d],i)=>{CR.push({m:box(x,0,2.2,4.4,1.3,[0xc0392b,0xf1c40f,0x2980b9,0xecf0f1,0x27ae60][i%5],.4),x,d,z:Math.random()*300-150})});
 
 // --- Norrköping realism pass: streetscape, river crossings and city landmarks ---
-const detailMat = c => new THREE.MeshStandardMaterial({color:c, roughness:.82, metalness:.04});
-function detailBox(x,y,z,w,h,d,c, parent=S){
-  const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),detailMat(c));
-  m.position.set(x,y+h/2,z); parent.add(m); return m;
+const DETAIL_MATS = new Map(), DETAIL_GEOS = new Map();
+const detailMat = c => {
+  if(!DETAIL_MATS.has(c)) DETAIL_MATS.set(c,new THREE.MeshStandardMaterial({color:c,roughness:.82,metalness:.04}));
+  return DETAIL_MATS.get(c);
+};
+function detailBox(x,y,z,w,h,d,c,parent=S){
+  const key=w+','+h+','+d;
+  if(!DETAIL_GEOS.has(key)) DETAIL_GEOS.set(key,new THREE.BoxGeometry(w,h,d));
+  const m=new THREE.Mesh(DETAIL_GEOS.get(key),detailMat(c));
+  m.position.set(x,y+h/2,z);parent.add(m);return m;
 }
 function streetLamp(x,z){
   const g=new THREE.Group();
   const pole=new THREE.Mesh(new THREE.CylinderGeometry(.09,.14,7,8),detailMat(0x343b3d));
-  pole.position.y=3.5; g.add(pole);
-  const arm=detailBox(.45,6.65,0,.95,.12,.12,0x343b3d,g);
+  pole.position.y=3.5;g.add(pole);
+  detailBox(.45,6.65,0,.95,.12,.12,0x343b3d,g);
   const head=detailBox(.92,6.55,0,.55,.18,.35,0xe6dfb5,g);
-  const glow=new THREE.PointLight(0xffdca0,.45,17); glow.position.set(.95,6.35,0);g.add(glow);
+  head.material=detailMat(0xffe6a8);
+  head.material.emissive=new THREE.Color(0x8c713c);
   g.position.set(x,0,z);S.add(g);
 }
 function addBridge(x,z,width=12){
@@ -267,8 +294,28 @@ function tramTrack(x,z1,z2){
 }
 tramTrack(-1.4,-88,173);tramTrack(1.4,-88,173);
 tramTrack(73,-78,58);tramTrack(77,-78,58);
-// Add lane markings to the principal streets.
+// Add lane markings, sidewalks and safe crossings to the principal streets.
 [[-200,12,200,12,8],[-100,100,100,100,6],[0,-90,0,175,9],[-60,-60,-60,60,7],[75,-80,75,60,7]].forEach(r=>addRoadMarkings(...r));
+function sidewalk(x1,z1,x2,z2,width=1.8){
+  const len=Math.hypot(x2-x1,z2-z1),angle=Math.atan2(x2-x1,z2-z1);
+  for(const side of [-1,1]){
+    const x=(x1+x2)/2+Math.cos(angle)*side*(width+4.2);
+    const z=(z1+z2)/2-Math.sin(angle)*side*(width+4.2);
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(width,len),detailMat(0xb9b5a9));
+    m.rotation.x=-Math.PI/2;m.rotation.z=angle;m.position.set(x,.085,z);S.add(m);
+  }
+}
+function zebra(x,z,across='x'){
+  for(let i=-4;i<=4;i++){
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(across==='x'?.65:5.5,across==='x'?5.5:.65),detailMat(0xe8e5d9));
+    m.rotation.x=-Math.PI/2;m.position.set(x+(across==='x'?i*.95:0),.09,z+(across==='x'?0:i*.95));S.add(m);
+  }
+}
+sidewalk(-200,12,200,12,1.7);
+sidewalk(0,-90,0,175,1.7);
+sidewalk(-60,-60,-60,60,1.5);
+sidewalk(75,-80,75,60,1.5);
+zebra(-30,12,'z');zebra(0,45,'x');zebra(75,12,'z');
 // Recognisable central Norrköping street scene: brick façades, shop windows and a small square.
 for(const b of [[-46,-34,20,12,11],[-22,-3,18,18,28],[-24,-34,22,12,9],[14,36,18,12,10],[-30,27,22,12,7],[40,32,26,20,12]]){
   addWindows(b[0],b[1],b[2],b[3],b[4],Math.max(3,Math.floor(b[2]/4)),Math.max(2,Math.floor(b[4]/5)));
